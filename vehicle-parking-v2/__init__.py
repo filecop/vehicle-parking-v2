@@ -1,34 +1,41 @@
-from flask import Flask
-from .config import DevConfig, ProdConfig, TestConfig
 import os
-from .db import db, migrate
-from . import models
-from .blueprints.web import web_bp
-from .blueprints.api import api_bp
+from flask import Flask
+from . import db
+from .frontend import authenticate
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
 
-def create_app(config_setting:str | None = None):
-    app = Flask(__name__)
-    config_setting = (config_setting or os.getenv("FLASK_CONFIG","development")).lower()
-    mapping = {"development":DevConfig, "prod":ProdConfig, "test":TestConfig}
-    app.config.from_object(mapping[config_setting])
 
+def create_app(test_config=None):
+    # create and configure the app
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_mapping(
+        SECRET_KEY='dev',
+        DATABASE=os.path.join(app.instance_path, 'vehicle-parking-v2.sqlite'),
+    )
+
+    if test_config is None:
+        # load the instance config, if it exists, when not testing
+        app.config.from_pyfile('config.py', silent=True)
+    else:
+        # load the test config if passed in
+        app.config.from_mapping(test_config)
+
+    # ensure the instance folder exists
     try:
         os.makedirs(app.instance_path)
     except OSError:
         pass
 
-    # Initialize extensions
+
     db.init_app(app)
-    migrate.init_app(app, db)
-    
-    # Register blueprints
-    app.register_blueprint(web_bp)
-    app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(authenticate.bp_frontend)
+
+    # a simple page that says hello
+    @app.route('/hello')
+    def hello():
+        return 'Hello, World!'
 
     return app
+
+
+    
